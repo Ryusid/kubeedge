@@ -1,0 +1,50 @@
+apiVersion: devices.kubeedge.io/v1beta1
+kind: Device
+metadata:
+  name: motioncam
+  namespace: default
+  labels:
+    description: 'Motion-Detection-Camera'
+    manufacturer: 'Custom'
+    model: 'motion-sensor-v1'
+spec:
+  deviceModelRef:
+    name: motion-sensor-model
+  nodeName: raspberrypi  # Replace with your edge node name
+  properties:
+    - name: motion
+      collectCycle: 5000000000   # Collect motion data every 5 seconds (5 * 10^9 nanoseconds)
+      reportCycle: 5000000000    # Report motion data every 5 seconds
+      reportToCloud: true
+      visitors:
+        protocolName: mqtt
+        configData:
+          dataType: string
+          propertyName: motion
+    - name: timestamp
+      collectCycle: 5000000000
+      reportCycle: 5000000000
+      reportToCloud: true
+      visitors:
+        protocolName: mqtt
+        configData:
+          dataType: int
+          propertyName: timestamp
+    - name: status
+      collectCycle: 10000000000  # Check device status every 10 seconds
+      reportCycle: 10000000000   # Report device status every 10 seconds
+      reportToCloud: true
+      visitors:
+        protocolName: mqtt
+        configData:
+          dataType: string
+          propertyName: status
+  protocol:
+    protocolName: mqtt
+    configData:
+      brokerURL: tcp://192.168.8.218:1883  # Your MQTT broker URL
+      clientID: motion-mapper-motioncam     # Unique client ID for this device
+      motionTopic: motion                   # Topic to subscribe for motion detection
+      username: ""                          # Optional: MQTT username
+      password: ""                          # Optional: MQTT password
+      qos: 0                               # QoS level (0, 1, or 2)
