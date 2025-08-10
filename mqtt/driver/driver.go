@@ -39,7 +39,10 @@ func (c *CustomizedClient) InitDevice() error {
         }
         
         // Initialize motion status - this ensures we have a known initial state
-        c.motionStatus = "no_motion"
+        if c.motionStatus == "" {       // only set once
+                c.motionStatus = "no_motion"
+        }
+
         klog.Infof("Initial motion status set to: %s", c.motionStatus)
         
         // Create MQTT client options

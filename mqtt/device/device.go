@@ -72,7 +72,6 @@ func (d *DevPanel) DevStart() {
 		d.wg.Add(1)
 		klog.Infof("About to start goroutine for device %s", id)
 		go d.start(ctx, dev)
-		klog.Infof("Goroutine started for device %s", id)
 	}
 	signal.Notify(d.quitChan, os.Interrupt)
 	go func() {
