@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-
 	"k8s.io/klog/v2"
 
 	"github.com/kubeedge/mqtt/device"
@@ -18,7 +17,7 @@ func main() {
 	var c *config.Config
 
 	klog.InitFlags(nil)
-	defer klog.Flush()
+    defer klog.Flush()
 
 	if c, err = config.Parse(); err != nil {
 		klog.Fatal(err)

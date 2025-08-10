@@ -2,10 +2,8 @@ package driver
 
 import (
         "fmt"
-        "strconv"
         "sync"
         "time"
-
         mqtt "github.com/eclipse/paho.mqtt.golang"
         "k8s.io/klog/v2"
         "github.com/kubeedge/mapper-framework/pkg/common"
@@ -16,7 +14,6 @@ func NewClient(protocol ProtocolConfig) (*CustomizedClient, error) {
                 ProtocolConfig: protocol,
                 deviceMutex:    sync.Mutex{},
                 motionStatus:   "no_motion",
-                lastUpdate:     time.Now(),
                 isConnected:    false,
         }
         return client, nil
@@ -40,6 +37,10 @@ func (c *CustomizedClient) InitDevice() error {
         if c.ConfigData.QoS == 0 {
                 c.ConfigData.QoS = 0 // Default QoS
         }
+        
+        // Initialize motion status - this ensures we have a known initial state
+        c.motionStatus = "no_motion"
+        klog.Infof("Initial motion status set to: %s", c.motionStatus)
         
         // Create MQTT client options
         opts := mqtt.NewClientOptions()
@@ -84,7 +85,7 @@ func (c *CustomizedClient) InitDevice() error {
                 return fmt.Errorf("failed to connect to MQTT broker: %v", token.Error())
         }
         
-        klog.Infof("Motion detection device initialized successfully")
+        klog.Infof("Motion detection device initialized successfully with initial status: %s", c.motionStatus)
         return nil
 }
 
@@ -92,16 +93,12 @@ func (c *CustomizedClient) GetDeviceData(visitor *VisitorConfig) (interface{}, e
         c.deviceMutex.Lock()
         defer c.deviceMutex.Unlock()
         
+        klog.V(2).Infof("GetDeviceData called for property: %s", visitor.VisitorConfigData.PropertyName)
+        
         switch visitor.VisitorConfigData.PropertyName {
         case "motion":
+                klog.V(2).Infof("Returning motion status: %s", c.motionStatus)
                 return c.motionStatus, nil
-        case "timestamp":
-                return strconv.FormatInt(c.lastUpdate.Unix(), 10), nil
-        case "status":
-                if c.isConnected {
-                        return "online", nil
-                }
-                return "offline", nil
         default:
                 return nil, fmt.Errorf("unknown property: %s", visitor.VisitorConfigData.PropertyName)
         }
@@ -158,8 +155,12 @@ func (c *CustomizedClient) onMotionMessage(client mqtt.Client, msg mqtt.Message)
         defer c.deviceMutex.Unlock()
         
         // Update motion status based on message content
+        oldStatus := c.motionStatus
         c.motionStatus = string(msg.Payload())
-        c.lastUpdate = time.Now()
         
-        klog.V(1).Infof("Motion status updated: %s at %v", c.motionStatus, c.lastUpdate)
+        if oldStatus != c.motionStatus {
+                klog.Infof("Motion status changed from '%s' to '%s' - twin will be updated on next collection cycle", oldStatus, c.motionStatus)
+        } else {
+                klog.V(2).Infof("Motion status unchanged: '%s'", c.motionStatus)
+        }
 }

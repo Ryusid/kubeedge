@@ -2,7 +2,6 @@ package driver
 
 import (
         "sync"
-        "time"
 
         mqtt "github.com/eclipse/paho.mqtt.golang"
         "github.com/kubeedge/mapper-framework/pkg/common"
@@ -19,7 +18,6 @@ type CustomizedClient struct {
         deviceMutex    sync.Mutex
         mqttClient     mqtt.Client
         motionStatus   string
-        lastUpdate     time.Time
         isConnected    bool
         ProtocolConfig
 }

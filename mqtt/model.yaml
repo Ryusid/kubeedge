@@ -9,11 +9,4 @@ spec:
     description: Motion detection status from MQTT sensor
     type: STRING
     accessMode: ReadOnly
-  - name: timestamp
-    description: Last update timestamp of motion detection
-    type: INT
-    accessMode: ReadOnly
-  - name: status
-    description: Device connection status (online/offline)
-    type: STRING
-    accessMode: ReadOnly
+  protocol: mqtt

@@ -44,6 +44,8 @@ var (
 
 var ErrEmptyData = errors.New("device or device model list is empty")
 
+
+
 // NewDevPanel init and return devPanel
 func NewDevPanel() *DevPanel {
 	once.Do(func() {
@@ -61,12 +63,16 @@ func NewDevPanel() *DevPanel {
 
 // DevStart start all devices.
 func (d *DevPanel) DevStart() {
+	klog.Infof("DevStart called with %d devices", len(d.devices))
 	for id, dev := range d.devices {
 		klog.V(4).Info("Dev: ", id, dev)
+		klog.V(4).Info("Starting device %s", id)
 		ctx, cancel := context.WithCancel(context.Background())
 		d.deviceMuxs[id] = cancel
 		d.wg.Add(1)
+		klog.Infof("About to start goroutine for device %s", id)
 		go d.start(ctx, dev)
+		klog.Infof("Goroutine started for device %s", id)
 	}
 	signal.Notify(d.quitChan, os.Interrupt)
 	go func() {
@@ -103,12 +109,16 @@ func (d *DevPanel) start(ctx context.Context, dev *driver.CustomizedDev) {
 		klog.Errorf("Init device %s error: %v", dev.Instance.ID, err)
 		return
 	}
+	klog.Infof("Device %s initialization completed, starting dataHandler", dev.Instance.Name)
 	go dataHandler(ctx, dev)
+	klog.Infof("dataHandler goroutine started for device %s", dev.Instance.Name)
 	<-ctx.Done()
 }
 
 // dataHandler initialize the timer to handle data plane and devicetwin.
 func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
+	klog.Infof("dataHandler started for device %s with %d twins", dev.Instance.Name, len(dev.Instance.Twins))
+	
 	// handle device status report
 	getStates := &DeviceStates{
 		Client:          dev.CustomizedClient,
@@ -118,8 +128,13 @@ func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
 		ReportCycle:     time.Millisecond * time.Duration(dev.Instance.Status.ReportCycle),
 	}
 	go getStates.Run(ctx)
+	
+	klog.Infof("Starting twin processing loop for %d twins", len(dev.Instance.Twins))
+	
 	// handle device twin report
 	for _, twin := range dev.Instance.Twins {
+		klog.Infof("Processing twin property: %s", twin.PropertyName)
+		
 		twin.Property.PProperty.DataType = strings.ToLower(twin.Property.PProperty.DataType)
 		var visitorConfig driver.VisitorConfig
 
@@ -129,6 +144,9 @@ func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
 			klog.Errorf("Unmarshal VisitorConfig error: %v", err)
 			continue
 		}
+		
+		klog.Infof("Twin property %s - DataType: %s, ReportToCloud: %v", twin.PropertyName, twin.Property.PProperty.DataType, twin.Property.ReportToCloud)
+		
 		err = setVisitor(&visitorConfig, &twin, dev)
 		if err != nil {
 			klog.Error(err)
@@ -139,12 +157,15 @@ func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
 		// such as saving frames or saving videos, and will no longer push it to the user database and application.
 		// If there are other needs for stream data processing, users can add functions in the mapper/data/stream directory.
 		if twin.Property.PProperty.DataType == "stream" {
+			klog.Infof("Property %s is stream type, skipping twin data collection", twin.PropertyName)
 			err = stream.StreamHandler(&twin, dev.CustomizedClient, &visitorConfig)
 			if err != nil {
 				klog.Errorf("processed streaming data by %s Error: %v", twin.PropertyName, err)
 			}
 			continue
 		}
+
+		klog.Infof("Creating TwinData for property %s", twin.PropertyName)
 
 		// handle twin
 		twinData := &TwinData{
@@ -159,6 +180,7 @@ func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
 			CollectCycle:    time.Millisecond * time.Duration(twin.Property.CollectCycle),
 			ReportToCloud:   twin.Property.ReportToCloud,
 		}
+		klog.Infof("Starting TwinData goroutine for property %s with CollectCycle %v, ReportToCloud %v", twin.PropertyName, twinData.CollectCycle, twinData.ReportToCloud)
 		go twinData.Run(ctx)
 
 		dataModel := common.NewDataModel(dev.Instance.Name, twin.Property.PropertyName, dev.Instance.Namespace, common.WithType(twin.ObservedDesired.Metadata.Type))

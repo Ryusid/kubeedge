@@ -9,7 +9,7 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/influxdata/influxdb-client-go/v2 v2.13.0
-	github.com/kubeedge/api v1.21.0
+	github.com/kubeedge/api v1.20.0
 	github.com/kubeedge/mapper-framework v1.20.1-0.20250628103114-bd14c0473a82
 	github.com/taosdata/driver-go/v3 v3.5.1
 	go.opentelemetry.io/otel v1.23.0
