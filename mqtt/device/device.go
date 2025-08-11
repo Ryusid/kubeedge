@@ -342,7 +342,7 @@ func (d *DevPanel) DevInit(deviceList []*dmiapi.Device, deviceModelList []*dmiap
 }
 
 // UpdateDev stop old device only if protocol config changed; otherwise update twins in place.
-func (d *DevPanel) UpdateDev(newDev common.DeviceInstance, model common.DeviceModel) {
+func (d *DevPanel) UpdateDev(model common.DeviceModel, newDev common.DeviceInstance) {
     klog.Infof("UpdateDevice")
     klog.Infof("model: %+v", model)
 
