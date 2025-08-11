@@ -20,76 +20,81 @@ func NewClient(protocol ProtocolConfig) (*CustomizedClient, error) {
 }
 
 func (c *CustomizedClient) InitDevice() error {
-        klog.Infof("Initializing motion detection device with broker: %s", c.ConfigData.BrokerURL)
-        
-        // Validate required configuration
-        if c.ConfigData.BrokerURL == "" {
-                return fmt.Errorf("brokerURL is required in protocol config")
-        }
-        
-        // Set defaults
-        if c.ConfigData.ClientID == "" {
-                c.ConfigData.ClientID = fmt.Sprintf("motion-mapper-%d", time.Now().Unix())
-        }
-        if c.ConfigData.MotionTopic == "" {
-                c.ConfigData.MotionTopic = "motion"
-        }
-        if c.ConfigData.QoS == 0 {
-                c.ConfigData.QoS = 0 // Default QoS
-        }
-        
-        // Initialize motion status - this ensures we have a known initial state
-        if c.motionStatus == "" {       // only set once
-                c.motionStatus = "no_motion"
-        }
+    // Preserve current state across re-inits
+    previousState := c.motionStatus
+    klog.Infof("Initializing motion detection device with broker: %s (preserving state: %s)",
+        c.ProtocolConfig.BrokerURL, previousState)
 
+    // Validate required configuration
+    if c.ProtocolConfig.BrokerURL == "" {
+        return fmt.Errorf("brokerURL is required in protocol config")
+    }
+
+    // Defaults
+    if c.ProtocolConfig.ClientID == "" {
+        c.ProtocolConfig.ClientID = fmt.Sprintf("motion-mapper-%d", time.Now().Unix())
+    }
+    if c.ProtocolConfig.MotionTopic == "" {
+        c.ProtocolConfig.MotionTopic = "motion"
+    }
+
+    // MQTT client options
+    opts := mqtt.NewClientOptions()
+    opts.AddBroker(c.ProtocolConfig.BrokerURL)
+    opts.SetClientID(c.ProtocolConfig.ClientID)
+    opts.SetCleanSession(true)
+    opts.SetAutoReconnect(true)
+    opts.SetKeepAlive(30 * time.Second)
+    opts.SetPingTimeout(10 * time.Second)
+    opts.SetConnectTimeout(30 * time.Second)
+    opts.SetMaxReconnectInterval(5 * time.Second)
+
+    if c.ProtocolConfig.Username != "" {
+        opts.SetUsername(c.ProtocolConfig.Username)
+    }
+    if c.ProtocolConfig.Password != "" {
+        opts.SetPassword(c.ProtocolConfig.Password)
+    }
+
+    // Handlers
+    opts.SetConnectionLostHandler(func(client mqtt.Client, err error) {
+        klog.Errorf("MQTT connection lost: %v", err)
+        c.deviceMutex.Lock()
+        c.isConnected = false
+        c.deviceMutex.Unlock()
+    })
+
+    opts.SetOnConnectHandler(func(client mqtt.Client) {
+        klog.Infof("MQTT connected successfully")
+        c.deviceMutex.Lock()
+        c.isConnected = true
+        c.deviceMutex.Unlock()
+
+        qos := byte(c.ProtocolConfig.QoS)
+        if token := client.Subscribe(c.ProtocolConfig.MotionTopic, qos, c.onMotionMessage); token.Wait() && token.Error() != nil {
+            klog.Errorf("Failed to subscribe to motion topic: %v", token.Error())
+        } else {
+            klog.Infof("Successfully subscribed to motion topic: %s", c.ProtocolConfig.MotionTopic)
+        }
+    })
+
+    // Connect
+    c.mqttClient = mqtt.NewClient(opts)
+    if token := c.mqttClient.Connect(); token.Wait() && token.Error() != nil {
+        return fmt.Errorf("failed to connect to MQTT broker: %v", token.Error())
+    }
+
+    // Restore previous state (avoid resetting to default on re-init)
+    if previousState != "" {
+        c.motionStatus = previousState
+        klog.Infof("Restored motion status to: %s after reconnection", c.motionStatus)
+    } else if c.motionStatus == "" {
+        c.motionStatus = "no_motion"
         klog.Infof("Initial motion status set to: %s", c.motionStatus)
-        
-        // Create MQTT client options
-        opts := mqtt.NewClientOptions()
-        opts.AddBroker(c.ConfigData.BrokerURL)
-        opts.SetClientID(c.ConfigData.ClientID)
-        opts.SetCleanSession(true)
-        opts.SetAutoReconnect(true)
-        
-        if c.ConfigData.Username != "" {
-                opts.SetUsername(c.ConfigData.Username)
-        }
-        if c.ConfigData.Password != "" {
-                opts.SetPassword(c.ConfigData.Password)
-        }
-        
-        // Set connection lost handler
-        opts.SetConnectionLostHandler(func(client mqtt.Client, err error) {
-                klog.Errorf("MQTT connection lost: %v", err)
-                c.deviceMutex.Lock()
-                c.isConnected = false
-                c.deviceMutex.Unlock()
-        })
-        
-        // Set on connect handler
-        opts.SetOnConnectHandler(func(client mqtt.Client) {
-                klog.Infof("MQTT connected successfully")
-                c.deviceMutex.Lock()
-                c.isConnected = true
-                c.deviceMutex.Unlock()
-                
-                // Subscribe to motion topic
-                if token := client.Subscribe(c.ConfigData.MotionTopic, byte(c.ConfigData.QoS), c.onMotionMessage); token.Wait() && token.Error() != nil {
-                        klog.Errorf("Failed to subscribe to motion topic: %v", token.Error())
-                } else {
-                        klog.Infof("Successfully subscribed to motion topic: %s", c.ConfigData.MotionTopic)
-                }
-        })
-        
-        // Create and connect MQTT client
-        c.mqttClient = mqtt.NewClient(opts)
-        if token := c.mqttClient.Connect(); token.Wait() && token.Error() != nil {
-                return fmt.Errorf("failed to connect to MQTT broker: %v", token.Error())
-        }
-        
-        klog.Infof("Motion detection device initialized successfully with initial status: %s", c.motionStatus)
-        return nil
+    }
+
+    klog.Infof("Motion detection device initialized successfully with status: %s", c.motionStatus)
+    return nil
 }
 
 func (c *CustomizedClient) GetDeviceData(visitor *VisitorConfig) (interface{}, error) {
