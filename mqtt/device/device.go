@@ -343,68 +343,70 @@ func (d *DevPanel) DevInit(deviceList []*dmiapi.Device, deviceModelList []*dmiap
 
 // UpdateDev stop old device only if protocol config changed; otherwise update twins in place.
 func (d *DevPanel) UpdateDev(model *common.DeviceModel, newDev *common.DeviceInstance) {
-    klog.Infof("UpdateDevice")
-    klog.Infof("model: %+v", model)
+	klog.Infof("UpdateDevice")
+	klog.Infof("model: %+v", model)
 
-    d.serviceMutex.Lock()
-    defer d.serviceMutex.Unlock()
+	d.serviceMutex.Lock()
+	defer d.serviceMutex.Unlock()
 
-    id := newDev.ID
-    old, ok := d.devices[id]
-    if !ok {
-        // New device, init and start
-        klog.Infof("Device %s not found, initializing new device", id)
-        d.devices[id] = &driver.CustomizedDev{Instance: newDev, CustomizedClient: nil}
-        ctx, cancel := context.WithCancel(context.Background())
-        d.deviceMuxs[id] = cancel
-        d.wg.Add(1)
-        go d.start(ctx, d.devices[id])
-        return
-    }
+	id := newDev.ID
+	old, ok := d.devices[id]
+	if !ok {
+		// New device, init and start
+		klog.Infof("Device %s not found, initializing new device", id)
+		d.devices[id] = &driver.CustomizedDev{
+			Instance:         *newDev, // Instance is a value type
+			CustomizedClient: nil,
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		d.deviceMuxs[id] = cancel
+		d.wg.Add(1)
+		go d.start(ctx, d.devices[id])
+		return
+	}
 
-    // Decide whether to restart based on protocol config diffs
-    if protocolConfigChanged(old.Instance, newDev) {
-        klog.Infof("Protocol config changed for %s, restarting device", id)
-        // Stop old client and goroutines
-        if old.CustomizedClient != nil {
-            if err := old.CustomizedClient.StopDevice(); err != nil {
-                klog.Errorf("Failed to stop device %s: %v", id, err)
-            }
-        }
-        // Cancel old context
-        if cancel, ok := d.deviceMuxs[id]; ok {
-            cancel()
-            delete(d.deviceMuxs, id)
-        }
-        // Replace instance, start again
-        old.Instance = newDev
-        ctx, cancel := context.WithCancel(context.Background())
-        d.deviceMuxs[id] = cancel
-        d.wg.Add(1)
-        go d.start(ctx, old)
-        return
-    }
+	// Decide whether to restart based on protocol config diffs
+	if protocolConfigChanged(&old.Instance, newDev) {
+		klog.Infof("Protocol config changed for %s, restarting device", id)
 
-    // No protocol change: keep client, just update instance fields (twins, cycles, metadata)
-    klog.Infof("No protocol change for %s, skipping restart. Updating twins/status only.", id)
-    old.Instance.Twins = newDev.Twins
-    old.Instance.Status = newDev.Status
-    old.Instance.Name = newDev.Name
-    old.Instance.Namespace = newDev.Namespace
-    old.Instance.ID = newDev.ID
-    // Note: if collect/report cycles changed, existing TwinData goroutines keep old cycles.
-    // Extend later to reschedule tickers if needed.
+		// Stop old client and goroutines
+		if old.CustomizedClient != nil {
+			if err := old.CustomizedClient.StopDevice(); err != nil {
+				klog.Errorf("Failed to stop device %s: %v", id, err)
+			}
+		}
+		// Cancel old context
+		if cancel, ok := d.deviceMuxs[id]; ok {
+			cancel()
+			delete(d.deviceMuxs, id)
+		}
+
+		// Replace instance, start again
+		old.Instance = *newDev
+		ctx, cancel := context.WithCancel(context.Background())
+		d.deviceMuxs[id] = cancel
+		d.wg.Add(1)
+		go d.start(ctx, old)
+		return
+	}
+
+	// No protocol change: keep client, just update instance fields (twins, cycles, metadata)
+	klog.Infof("No protocol change for %s, skipping restart. Updating twins/status only.", id)
+	old.Instance.Twins = newDev.Twins
+	old.Instance.Status = newDev.Status
+	old.Instance.Name = newDev.Name
+	old.Instance.Namespace = newDev.Namespace
+	old.Instance.ID = newDev.ID
 }
 
 // protocolConfigChanged compares only the protocol-critical config to decide if a restart is needed.
 func protocolConfigChanged(oldInst, newInst *common.DeviceInstance) bool {
-    // Compare protocol name
-    if oldInst.PProtocol.ProtocolName != newInst.PProtocol.ProtocolName {
-        return true
-    }
-    // Compare raw protocol config bytes (they are JSON blobs)
-    return !bytes.Equal(oldInst.PProtocol.ConfigData, newInst.PProtocol.ConfigData)
-}
+	// Compare protocol name
+	if oldInst.PProtocol.ProtocolName != newInst.PProtocol.ProtocolName {
+		return true
+	}
+	// Compare raw protocol config bytes (JSON blobs)
+	return !bytes.Equal(oldInst.PProtocol.ConfigData, newInst.PProtocol.ConfigData)
 
 // UpdateDev stop old device, then update and start new device
 /*func (d *DevPanel) UpdateDev(model *common.DeviceModel, device *common.DeviceInstance) {
