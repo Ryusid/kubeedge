@@ -407,6 +407,7 @@ func protocolConfigChanged(oldInst, newInst *common.DeviceInstance) bool {
 	}
 	// Compare raw protocol config bytes (JSON blobs)
 	return !bytes.Equal(oldInst.PProtocol.ConfigData, newInst.PProtocol.ConfigData)
+}
 
 // UpdateDev stop old device, then update and start new device
 /*func (d *DevPanel) UpdateDev(model *common.DeviceModel, device *common.DeviceInstance) {

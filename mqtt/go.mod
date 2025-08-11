@@ -2,8 +2,6 @@ module github.com/kubeedge/mqtt
 
 go 1.22.9
 
-toolchain go1.24.2
-
 require (
 	github.com/eclipse/paho.mqtt.golang v1.2.0
 	github.com/go-redis/redis/v8 v8.11.5
