@@ -342,7 +342,7 @@ func (d *DevPanel) DevInit(deviceList []*dmiapi.Device, deviceModelList []*dmiap
 }
 
 // UpdateDev stop old device only if protocol config changed; otherwise update twins in place.
-func (d *DevPanel) UpdateDev(model common.DeviceModel, newDev common.DeviceInstance) {
+func (d *DevPanel) UpdateDev(model *common.DeviceModel, newDev *common.DeviceInstance) {
     klog.Infof("UpdateDevice")
     klog.Infof("model: %+v", model)
 
@@ -397,7 +397,7 @@ func (d *DevPanel) UpdateDev(model common.DeviceModel, newDev common.DeviceInsta
 }
 
 // protocolConfigChanged compares only the protocol-critical config to decide if a restart is needed.
-func protocolConfigChanged(oldInst, newInst common.DeviceInstance) bool {
+func protocolConfigChanged(oldInst, newInst *common.DeviceInstance) bool {
     // Compare protocol name
     if oldInst.PProtocol.ProtocolName != newInst.PProtocol.ProtocolName {
         return true
