@@ -13,8 +13,8 @@ spec:
   nodeName: raspberrypi
   properties:
     - name: motion
-      collectCycle: 5000000000
-      reportCycle: 5000000000
+      collectCycle: 15000
+      reportCycle: 15000
       reportToCloud: true
       visitors:
         protocolName: mqtt
@@ -34,6 +34,6 @@ status:
   twins:
     - propertyName: motion
       reported:
-        value: "no_motion"
+        value: ""
         metadata:
           type: "string"
