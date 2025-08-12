@@ -1,28 +1,28 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mapper-test
+  name: mqtt-mapper
   namespace: default
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: demo
+      app: mqtt-mapper
   template:
     metadata:
       labels:
-        app: demo
+        app: mqtt-mapper
     spec:
       nodeName: raspberrypi # replace with your edge node name
       containers:
-        - name: demo
+        - name: mqtt-mapper
           volumeMounts: # Required, mapper need to communicate with grpcclient and get the config
             - name: test-volume
               mountPath: /etc/kubeedge
             - name: config
               mountPath: /tmp
-          image: ryusid/mqtt-mapper:arm64-v1 # Replace with your mapper image name
-          imagePullPolicy: IfNotPresent
+          image: ryusid/mqtt-mapper:arm64v3 # Replace with your mapper image name
+          imagePullPolicy: Always
           resources:
             limits:
               cpu: 300m
@@ -30,8 +30,9 @@ spec:
             requests:
               cpu: 100m
               memory: 100Mi
-          command: [ "/bin/sh","-c" ]
-          args: [ "/kubeedge/main --config-file /tmp/config.yaml --v 4" ]
+          command: [ "/app/coap"]
+          args:
+            - "--v 5"
       volumes:
         - name: test-volume
           hostPath:
