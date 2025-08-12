@@ -40,7 +40,7 @@ spec:
             type: Directory
         - name: config
           configMap:
-            name: cm-mapper
+            name: cm-mqtt-mapper
             items:
               - key: configData
                 path: config.yaml

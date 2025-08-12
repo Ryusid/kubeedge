@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: cm-mapper
+  name: cm-mqtt-mapper
 data:
   configData: |
     grpc_server:
