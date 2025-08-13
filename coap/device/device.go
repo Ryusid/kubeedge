@@ -1,7 +1,6 @@
 package device
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,15 +13,15 @@ import (
 
 	"k8s.io/klog/v2"
 
-	dbInflux "github.com/kubeedge/mqtt/data/dbmethod/influxdb2"
-	dbMysql "github.com/kubeedge/mqtt/data/dbmethod/mysql"
-	dbRedis "github.com/kubeedge/mqtt/data/dbmethod/redis"
-	dbTdengine "github.com/kubeedge/mqtt/data/dbmethod/tdengine"
-	httpMethod "github.com/kubeedge/mqtt/data/publish/http"
-	mqttMethod "github.com/kubeedge/mqtt/data/publish/mqtt"
-	otelMethod "github.com/kubeedge/mqtt/data/publish/otel"
-	"github.com/kubeedge/mqtt/data/stream"
-	"github.com/kubeedge/mqtt/driver"
+	dbInflux "github.com/kubeedge/coap/data/dbmethod/influxdb2"
+	dbMysql "github.com/kubeedge/coap/data/dbmethod/mysql"
+	dbRedis "github.com/kubeedge/coap/data/dbmethod/redis"
+	dbTdengine "github.com/kubeedge/coap/data/dbmethod/tdengine"
+	httpMethod "github.com/kubeedge/coap/data/publish/http"
+	mqttMethod "github.com/kubeedge/coap/data/publish/mqtt"
+	otelMethod "github.com/kubeedge/coap/data/publish/otel"
+	"github.com/kubeedge/coap/data/stream"
+	"github.com/kubeedge/coap/driver"
 	dmiapi "github.com/kubeedge/api/apis/dmi/v1beta1"
 	"github.com/kubeedge/mapper-framework/pkg/common"
 	"github.com/kubeedge/mapper-framework/pkg/global"
@@ -45,8 +44,6 @@ var (
 
 var ErrEmptyData = errors.New("device or device model list is empty")
 
-
-
 // NewDevPanel init and return devPanel
 func NewDevPanel() *DevPanel {
 	once.Do(func() {
@@ -64,14 +61,11 @@ func NewDevPanel() *DevPanel {
 
 // DevStart start all devices.
 func (d *DevPanel) DevStart() {
-	klog.Infof("DevStart called with %d devices", len(d.devices))
 	for id, dev := range d.devices {
 		klog.V(4).Info("Dev: ", id, dev)
-		klog.V(4).Info("Starting device %s", id)
 		ctx, cancel := context.WithCancel(context.Background())
 		d.deviceMuxs[id] = cancel
 		d.wg.Add(1)
-		klog.Infof("About to start goroutine for device %s", id)
 		go d.start(ctx, dev)
 	}
 	signal.Notify(d.quitChan, os.Interrupt)
@@ -109,16 +103,12 @@ func (d *DevPanel) start(ctx context.Context, dev *driver.CustomizedDev) {
 		klog.Errorf("Init device %s error: %v", dev.Instance.ID, err)
 		return
 	}
-	klog.Infof("Device %s initialization completed, starting dataHandler", dev.Instance.Name)
 	go dataHandler(ctx, dev)
-	klog.Infof("dataHandler goroutine started for device %s", dev.Instance.Name)
 	<-ctx.Done()
 }
 
 // dataHandler initialize the timer to handle data plane and devicetwin.
 func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
-	klog.Infof("dataHandler started for device %s with %d twins", dev.Instance.Name, len(dev.Instance.Twins))
-	
 	// handle device status report
 	getStates := &DeviceStates{
 		Client:          dev.CustomizedClient,
@@ -128,13 +118,8 @@ func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
 		ReportCycle:     time.Millisecond * time.Duration(dev.Instance.Status.ReportCycle),
 	}
 	go getStates.Run(ctx)
-	
-	klog.Infof("Starting twin processing loop for %d twins", len(dev.Instance.Twins))
-	
 	// handle device twin report
 	for _, twin := range dev.Instance.Twins {
-		klog.Infof("Processing twin property: %s", twin.PropertyName)
-		
 		twin.Property.PProperty.DataType = strings.ToLower(twin.Property.PProperty.DataType)
 		var visitorConfig driver.VisitorConfig
 
@@ -144,9 +129,6 @@ func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
 			klog.Errorf("Unmarshal VisitorConfig error: %v", err)
 			continue
 		}
-		
-		klog.Infof("Twin property %s - DataType: %s, ReportToCloud: %v", twin.PropertyName, twin.Property.PProperty.DataType, twin.Property.ReportToCloud)
-		
 		err = setVisitor(&visitorConfig, &twin, dev)
 		if err != nil {
 			klog.Error(err)
@@ -157,15 +139,12 @@ func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
 		// such as saving frames or saving videos, and will no longer push it to the user database and application.
 		// If there are other needs for stream data processing, users can add functions in the mapper/data/stream directory.
 		if twin.Property.PProperty.DataType == "stream" {
-			klog.Infof("Property %s is stream type, skipping twin data collection", twin.PropertyName)
 			err = stream.StreamHandler(&twin, dev.CustomizedClient, &visitorConfig)
 			if err != nil {
 				klog.Errorf("processed streaming data by %s Error: %v", twin.PropertyName, err)
 			}
 			continue
 		}
-
-		klog.Infof("Creating TwinData for property %s", twin.PropertyName)
 
 		// handle twin
 		twinData := &TwinData{
@@ -180,7 +159,6 @@ func dataHandler(ctx context.Context, dev *driver.CustomizedDev) {
 			CollectCycle:    time.Millisecond * time.Duration(twin.Property.CollectCycle),
 			ReportToCloud:   twin.Property.ReportToCloud,
 		}
-		klog.Infof("Starting TwinData goroutine for property %s with CollectCycle %v, ReportToCloud %v", twin.PropertyName, twinData.CollectCycle, twinData.ReportToCloud)
 		go twinData.Run(ctx)
 
 		dataModel := common.NewDataModel(dev.Instance.Name, twin.Property.PropertyName, dev.Instance.Namespace, common.WithType(twin.ObservedDesired.Metadata.Type))
@@ -341,76 +319,8 @@ func (d *DevPanel) DevInit(deviceList []*dmiapi.Device, deviceModelList []*dmiap
 	return nil
 }
 
-// UpdateDev stop old device only if protocol config changed; otherwise update twins in place.
-func (d *DevPanel) UpdateDev(model *common.DeviceModel, newDev *common.DeviceInstance) {
-	klog.Infof("UpdateDevice")
-	klog.Infof("model: %+v", model)
-
-	d.serviceMutex.Lock()
-	defer d.serviceMutex.Unlock()
-
-	id := newDev.ID
-	old, ok := d.devices[id]
-	if !ok {
-		// New device, init and start
-		klog.Infof("Device %s not found, initializing new device", id)
-		d.devices[id] = &driver.CustomizedDev{
-			Instance:         *newDev, // Instance is a value type
-			CustomizedClient: nil,
-		}
-		ctx, cancel := context.WithCancel(context.Background())
-		d.deviceMuxs[id] = cancel
-		d.wg.Add(1)
-		go d.start(ctx, d.devices[id])
-		return
-	}
-
-	// Decide whether to restart based on protocol config diffs
-	if protocolConfigChanged(&old.Instance, newDev) {
-		klog.Infof("Protocol config changed for %s, restarting device", id)
-
-		// Stop old client and goroutines
-		if old.CustomizedClient != nil {
-			if err := old.CustomizedClient.StopDevice(); err != nil {
-				klog.Errorf("Failed to stop device %s: %v", id, err)
-			}
-		}
-		// Cancel old context
-		if cancel, ok := d.deviceMuxs[id]; ok {
-			cancel()
-			delete(d.deviceMuxs, id)
-		}
-
-		// Replace instance, start again
-		old.Instance = *newDev
-		ctx, cancel := context.WithCancel(context.Background())
-		d.deviceMuxs[id] = cancel
-		d.wg.Add(1)
-		go d.start(ctx, old)
-		return
-	}
-
-	// No protocol change: keep client, just update instance fields (twins, cycles, metadata)
-	klog.Infof("No protocol change for %s, skipping restart. Updating twins/status only.", id)
-	old.Instance.Twins = newDev.Twins
-	old.Instance.Status = newDev.Status
-	old.Instance.Name = newDev.Name
-	old.Instance.Namespace = newDev.Namespace
-	old.Instance.ID = newDev.ID
-}
-
-// protocolConfigChanged compares only the protocol-critical config to decide if a restart is needed.
-func protocolConfigChanged(oldInst, newInst *common.DeviceInstance) bool {
-	// Compare protocol name
-	if oldInst.PProtocol.ProtocolName != newInst.PProtocol.ProtocolName {
-		return true
-	}
-	// Compare raw protocol config bytes (JSON blobs)
-	return !bytes.Equal(oldInst.PProtocol.ConfigData, newInst.PProtocol.ConfigData)
-}
-
 // UpdateDev stop old device, then update and start new device
-/*func (d *DevPanel) UpdateDev(model *common.DeviceModel, device *common.DeviceInstance) {
+func (d *DevPanel) UpdateDev(model *common.DeviceModel, device *common.DeviceInstance) {
 	d.serviceMutex.Lock()
 	defer d.serviceMutex.Unlock()
 
@@ -429,7 +339,7 @@ func protocolConfigChanged(oldInst, newInst *common.DeviceInstance) bool {
 	d.deviceMuxs[device.ID] = cancelFunc
 	d.wg.Add(1)
 	go d.start(ctx, d.devices[device.ID])
-}*/
+}
 
 // UpdateDevTwins update device's twins
 func (d *DevPanel) UpdateDevTwins(deviceID string, twins []common.Twin) error {

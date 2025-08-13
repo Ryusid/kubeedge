@@ -1,49 +1,47 @@
 package driver
 
 import (
-        "sync"
+	"context"
+	"sync"
 
-        mqtt "github.com/eclipse/paho.mqtt.golang"
-        "github.com/kubeedge/mapper-framework/pkg/common"
+	"github.com/kubeedge/mapper-framework/pkg/common"
+	udpClient "github.com/plgd-dev/go-coap/v3/udp/client"
 )
 
 // CustomizedDev is the customized device configuration and client information.
 type CustomizedDev struct {
-        Instance         common.DeviceInstance
-        CustomizedClient *CustomizedClient
+	Instance         common.DeviceInstance
+	CustomizedClient *CustomizedClient
 }
 
+// CustomizedClient holds runtime state and protocol config for the device.
 type CustomizedClient struct {
-        // Motion detection specific variables
-        deviceMutex    sync.Mutex
-        motionStatus   string
-        isConnected    bool
-        ProtocolConfig
-        // CoAP specific fields
-        conn   *client.ClientConn
-        cancel context.CancelFunc
+	deviceMutex   sync.Mutex
+	ProtocolConfig
+	motionStatus string
+	isConnected  bool
+
+	// CoAP specific fields
+	conn   *udpClient.Conn
+	cancel context.CancelFunc
 }
 
+// ProtocolConfig is the CoAP protocol configuration used by the driver.
 type ProtocolConfig struct {
-        ProtocolName string `json:"protocolName"`
-        ConfigData   `json:"configData"`
+	Addr    string `json:"addr"`    // e.g. "192.168.8.50:5683"
+	Path    string `json:"path"`    // e.g. "/motion"
+	Observe bool   `json:"observe"` // true to use CoAP Observe
+	Timeout string `json:"timeout"` // e.g. "3s"
 }
 
-type ConfigData struct {
-        // CoAP protocol config data for motion detection
-        Addr    string `json:"addr"`    // CoAP server address (required) e.g., "192.168.8.50:5683"
-        Path    string `json:"path"`    // Resource path (default: "/motion")
-        Observe bool   `json:"observe"` // Use CoAP Observe for push notifications (default: false)
-        Timeout string `json:"timeout"` // Request timeout (default: "3s")
-}
-
+// VisitorConfig holds property visitor configuration.
 type VisitorConfig struct {
-        ProtocolName      string `json:"protocolName"`
-        VisitorConfigData `json:"configData"`
+	ProtocolName      string            `json:"protocolName"`
+	VisitorConfigData VisitorConfigData `json:"configData"`
 }
 
+// VisitorConfigData describes one visited property.
 type VisitorConfigData struct {
-        // Visitor config for accessing device properties
-        DataType     string `json:"dataType"`     // Data type of the property (string, int, etc.)
-        PropertyName string `json:"propertyName"` // Name of the property to access (motion, timestamp, status)
+	DataType     string `json:"dataType"`
+	PropertyName string `json:"propertyName"`
 }

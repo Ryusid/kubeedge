@@ -16,7 +16,7 @@ package stream
 import (
 	"errors"
 
-	"github.com/kubeedge/mqtt/driver"
+	"github.com/kubeedge/coap/driver"
 	"github.com/kubeedge/mapper-framework/pkg/common"
 )
 

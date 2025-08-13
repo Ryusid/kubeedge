@@ -24,11 +24,11 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"k8s.io/klog/v2"
 
-	"github.com/kubeedge/mqtt/driver"
+	"github.com/kubeedge/coap/driver"
 	"github.com/kubeedge/mapper-framework/pkg/common"
 )
 
-const meterName = "github.com/kubeedge/mqtt/data/dbmethod/otel"
+const meterName = "github.com/kubeedge/coap/data/dbmethod/otel"
 
 func DataHandler(ctx context.Context, twin *common.Twin, client *driver.CustomizedClient, visitorConfig *driver.VisitorConfig, dataModel *common.DataModel) {
 	cfg, err := NewConfig(twin.Property.PushMethod.MethodConfig)

@@ -22,7 +22,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/kubeedge/mqtt/driver"
+	"github.com/kubeedge/coap/driver"
 	"github.com/kubeedge/mapper-framework/pkg/common"
 )
 

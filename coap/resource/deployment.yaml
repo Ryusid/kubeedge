@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mapper-coap
+  name: mapper-test
   namespace: default
 spec:
   replicas: 1
@@ -13,7 +13,7 @@ spec:
       labels:
         app: demo
     spec:
-      nodeName: raspberrypi # replace with your edge node name
+      nodeName: # replace with your edge node name
       containers:
         - name: demo
           volumeMounts: # Required, mapper need to communicate with grpcclient and get the config
@@ -21,8 +21,14 @@ spec:
               mountPath: /etc/kubeedge
             - name: config
               mountPath: /tmp
-          image: ryusid/motion-coap-mapper:arm64v1
-          imagePullPolicy: Always
+          env: # Not Required, this field is used to mount the user database key
+            - name: TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: mysecret
+                  key: token
+          image:  # Replace with your mapper image name
+          imagePullPolicy: IfNotPresent
           resources:
             limits:
               cpu: 300m

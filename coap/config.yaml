@@ -4,6 +4,6 @@ common:
   name: CoAP-mapper
   version: v1.13.0
   api_version: v1.0.0
-  protocol: coap
+  protocol: coap # TODO add your protocol name
   address: 127.0.0.1
   edgecore_sock: /etc/kubeedge/dmi.sock
