@@ -43,7 +43,6 @@ func (c *CustomizedClient) InitDevice() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	c.cancel = cancel
 
-	// If your go-coap/v3 version doesn’t have udp.WithTarget, use the older signature:
 	conn, err := udp.Dial(c.ProtocolConfig.Addr)
 	if err != nil {
 		return fmt.Errorf("coap dial %s: %w", c.ProtocolConfig.Addr, err)
@@ -175,9 +174,14 @@ func (c *CustomizedClient) GetDeviceStates() (string, error) {
 
 func ParseProtocolFromGrpc(protocol *v1beta1.ProtocolConfig) (ProtocolConfig, error) {
     protocolConfigData := ProtocolConfig{}
-    if protocol.ConfigData != nil {
-        if err := json.Unmarshal(protocol.ConfigData, &protocolConfigData); err != nil {
-            return protocolConfigData, err
+    if protocol.ConfigData != nil && protocol.ConfigData.Data != nil {
+        // Convert map[string]interface{} to JSON bytes first
+        jsonBytes, err := json.Marshal(protocol.ConfigData.Data)
+        if err != nil {
+            return protocolConfigData, fmt.Errorf("failed to marshal protocol config: %v", err)
+        }
+        if err := json.Unmarshal(jsonBytes, &protocolConfigData); err != nil {
+            return protocolConfigData, fmt.Errorf("failed to unmarshal protocol config: %v", err)
         }
     }
     return protocolConfigData, nil
@@ -187,9 +191,14 @@ func ParseProtocolFromGrpc(protocol *v1beta1.ProtocolConfig) (ProtocolConfig, er
 func ParseVisitorConfigFromGrpc(visitor *v1beta1.VisitorConfig) (VisitorConfig, error) {
     visitorConfig := VisitorConfig{}
     visitorConfig.ProtocolName = visitor.ProtocolName
-    if visitor.ConfigData != nil {
-        if err := json.Unmarshal(visitor.ConfigData, &visitorConfig.VisitorConfigData); err != nil {
-            return visitorConfig, err
+    if visitor.ConfigData != nil && visitor.ConfigData.Data != nil {
+        // Convert map[string]interface{} to JSON bytes first
+        jsonBytes, err := json.Marshal(visitor.ConfigData.Data)
+        if err != nil {
+            return visitorConfig, fmt.Errorf("failed to marshal visitor config: %v", err)
+        }
+        if err := json.Unmarshal(jsonBytes, &visitorConfig.VisitorConfigData); err != nil {
+            return visitorConfig, fmt.Errorf("failed to unmarshal visitor config: %v", err)
         }
     }
     return visitorConfig, nil
