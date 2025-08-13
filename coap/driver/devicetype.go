@@ -28,6 +28,12 @@ type CustomizedClient struct {
 
 // ProtocolConfig is the CoAP protocol configuration used by the driver.
 type ProtocolConfig struct {
+	ProtocolName string `json:"protocolName"`
+    ConfigData   `json:"configData"`
+	
+}
+
+type ConfigData struct {
 	Addr    string `json:"addr"`    // e.g. "192.168.8.50:5683"
 	Path    string `json:"path"`    // e.g. "/motion"
 	Observe bool   `json:"observe"` // true to use CoAP Observe
