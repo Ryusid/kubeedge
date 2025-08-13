@@ -24,7 +24,7 @@ spec:
   protocol:
     protocolName: coap
     configData:
-      addr:  "192.168.8.XXX:5683"  # Replace XXX with camera's actual IP
+      addr:  "192.168.8.222:5683"  # Replace XXX with camera's actual IP
       path: "/motion"
       observe: true
       timeout: "5s"

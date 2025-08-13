@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: cm-coap-mapper
+  name: coap-cm-mapper
 data:
   configData: |
     grpc_server:

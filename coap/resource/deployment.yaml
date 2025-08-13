@@ -1,34 +1,28 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mapper-test
+  name: coap-mapper
   namespace: default
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: demo
+      app: coap-mapper
   template:
     metadata:
       labels:
-        app: demo
+        app: coap-mapper
     spec:
-      nodeName: # replace with your edge node name
+      nodeName: raspberrypi # replace with your edge node name
       containers:
-        - name: demo
+        - name: coap-mapper
           volumeMounts: # Required, mapper need to communicate with grpcclient and get the config
             - name: test-volume
               mountPath: /etc/kubeedge
             - name: config
               mountPath: /tmp
-          env: # Not Required, this field is used to mount the user database key
-            - name: TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: mysecret
-                  key: token
-          image:  # Replace with your mapper image name
-          imagePullPolicy: IfNotPresent
+          image: ryusid/motion-coap-mapper:arm64v3 # Replace with your mapper image name
+          imagePullPolicy: Always
           resources:
             limits:
               cpu: 300m
@@ -37,7 +31,7 @@ spec:
               cpu: 100m
               memory: 100Mi
           command: [ "/bin/sh","-c" ]
-          args: [ "/kubeedge/main --config-file /tmp/config.yaml --v 4" ]
+          args: [ "/app/coap --config-file /tmp/config.yaml --v 4" ]
       volumes:
         - name: test-volume
           hostPath:
@@ -45,7 +39,7 @@ spec:
             type: Directory
         - name: config
           configMap:
-            name: cm-mapper
+            name: coap-cm-mapper
             items:
               - key: configData
                 path: config.yaml
