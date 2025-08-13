@@ -24,7 +24,7 @@ func NewClient(protocolConfig ProtocolConfig) (*CustomizedClient, error) {
 
 func (c *CustomizedClient) InitDevice() error {
 	prev := c.motionStatus
-	klog.Infof("Initializing CoAP device with addr: %s (preserving state: %s)", c.Addr, prev)
+	klog.Infof("Initializing CoAP device with addr: %s (preserving state: %s)", c.ProtocolConfig.Addr, prev)
 
 	if c.ProtocolConfig.Addr == "" {
 		return fmt.Errorf("addr is required in protocol config")
@@ -175,14 +175,25 @@ func (c *CustomizedClient) GetDeviceStates() (string, error) {
 func ParseProtocolFromGrpc(protocol *v1beta1.ProtocolConfig) (ProtocolConfig, error) {
     protocolConfigData := ProtocolConfig{}
     if protocol.ConfigData != nil && protocol.ConfigData.Data != nil {
-        // Convert map[string]interface{} to JSON bytes first
         jsonBytes, err := json.Marshal(protocol.ConfigData.Data)
         if err != nil {
             return protocolConfigData, fmt.Errorf("failed to marshal protocol config: %v", err)
         }
-        if err := json.Unmarshal(jsonBytes, &protocolConfigData); err != nil {
+        
+        // First unmarshal to a temporary struct to handle nested configData
+        var temp struct {
+            ProtocolName string      `json:"protocolName"`
+            ConfigData   ConfigData  `json:"configData"`
+        }
+        
+        if err := json.Unmarshal(jsonBytes, &temp); err != nil {
             return protocolConfigData, fmt.Errorf("failed to unmarshal protocol config: %v", err)
         }
+        
+        protocolConfigData.ProtocolName = temp.ProtocolName
+        protocolConfigData.ConfigData = temp.ConfigData
+        
+        klog.V(2).Infof("Parsed protocol config: %+v", protocolConfigData)
     }
     return protocolConfigData, nil
 }
