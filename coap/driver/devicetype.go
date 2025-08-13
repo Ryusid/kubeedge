@@ -32,7 +32,7 @@ type ProtocolConfig struct {
     ConfigData   `json:"configData"`
 	
 }
-
+// Adding configdata
 type ConfigData struct {
 	Addr    string `json:"addr"`    // e.g. "192.168.8.50:5683"
 	Path    string `json:"path"`    // e.g. "/motion"
