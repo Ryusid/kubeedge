@@ -21,7 +21,11 @@ spec:
               mountPath: /etc/kubeedge
             - name: config
               mountPath: /tmp
+<<<<<<< HEAD
           image: ryusid/motion-coap-mapper:arm64v4 # Replace with your mapper image name
+=======
+          image: ryusid/motion-coap-mapper:arm64v5 # Replace with your mapper image name
+>>>>>>> ed35eae (fixing coap reconnection problems)
           imagePullPolicy: Always
           resources:
             limits:
