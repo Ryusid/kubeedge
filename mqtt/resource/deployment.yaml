@@ -21,7 +21,7 @@ spec:
               mountPath: /etc/kubeedge
             - name: config
               mountPath: /tmp
-          image: ryusid/mqtt-mapper:arm64v3 # Replace with your mapper image name
+          image: ryusid/motion-mqtt-mapper:arm64v3 # Replace with your mapper image name
           imagePullPolicy: Always
           resources:
             limits:
@@ -30,9 +30,8 @@ spec:
             requests:
               cpu: 100m
               memory: 100Mi
-          command: [ "/app/coap"]
-          args:
-            - "--v 5"
+          command: [ "/bin/sh","-c" ]
+          args: [ "/app/mqtt --config-file /tmp/config.yaml --v 4" ]
       volumes:
         - name: test-volume
           hostPath:
