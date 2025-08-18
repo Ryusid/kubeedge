@@ -8,10 +8,8 @@ PORT     = int(os.environ.get("MQTT_PORT", "1883"))
 TOPIC_IN = os.environ.get("TOPIC_IN", "motion/device/+/image")           # bytes (JPEG)
 TOPIC_OUT_FMT = os.environ.get("TOPIC_OUT_FMT", "motion/device/{id}/class")
 
-print(f"[CFG] broker={BROKER}:{PORT} in={TOPIC_IN} yolo={YOLO_MODEL}")
+print(f"[CFG] broker={BROKER}:{PORT} in={TOPIC_IN}")
 
-
-print(f"[INIT] YOLO unavailable ({e}); falling back to OpenCV face cascade")
 CASCADE_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
 if face_cascade.empty():
@@ -35,7 +33,7 @@ def on_message(client, userdata, msg):
         # decode JPEG bytes
         arr = np.frombuffer(msg.payload, dtype=np.uint8)
         img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-        label = classify_bgr(img)
+        label = str(classify_bgr(img))
         out_topic = TOPIC_OUT_FMT.format(id=cam_id)
         # publish label (qos=1 for reliability; no retain)
         client.publish(out_topic, label, qos=1, retain=False)
@@ -53,4 +51,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
