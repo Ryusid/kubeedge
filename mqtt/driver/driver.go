@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"strings"
         "fmt"
         "sync"
         "time"
@@ -13,17 +14,15 @@ func NewClient(protocol ProtocolConfig) (*CustomizedClient, error) {
         client := &CustomizedClient{
                 ProtocolConfig: protocol,
                 deviceMutex:    sync.Mutex{},
-                motionStatus:   "no_motion",
+                motionStatus:   false,
                 isConnected:    false,
         }
         return client, nil
 }
 
 func (c *CustomizedClient) InitDevice() error {
-    // Preserve current state across re-inits
-    previousState := c.motionStatus
-    klog.Infof("Initializing motion detection device with broker: %s (preserving state: %s)",
-        c.ProtocolConfig.BrokerURL, previousState)
+    klog.Infof("Initializing motion detection device with broker: %s",
+        c.ProtocolConfig.BrokerURL)
 
     // Validate required configuration
     if c.ProtocolConfig.BrokerURL == "" {
@@ -35,9 +34,14 @@ func (c *CustomizedClient) InitDevice() error {
         c.ProtocolConfig.ClientID = fmt.Sprintf("motion-mapper-%d", time.Now().Unix())
     }
     if c.ProtocolConfig.MotionTopic == "" {
-        c.ProtocolConfig.MotionTopic = "motion"
+        return fmt.Errorf("Motion topic is required in protocol config")
     }
-
+    if c.ProtocolConfig.LastDetectionTopic == "" {
+	return fmt.Errorf("Last Detection topic is required in protocol config")
+    }
+    if c.ProtocolConfig.ClassTopic == "" {
+        return fmt.Errorf("Class topic is required in protocol config")
+    }
     // MQTT client options
     opts := mqtt.NewClientOptions()
     opts.AddBroker(c.ProtocolConfig.BrokerURL)
@@ -76,6 +80,19 @@ func (c *CustomizedClient) InitDevice() error {
         } else {
             klog.Infof("Successfully subscribed to motion topic: %s", c.ProtocolConfig.MotionTopic)
         }
+
+        if token := client.Subscribe(c.ProtocolConfig.LastDetectionTopic, qos, c.onLastDetectionMessage); token.Wait() && token.Error() != nil {
+            klog.Errorf("Failed to subscribe to motion topic: %v", token.Error())
+        } else {
+            klog.Infof("Successfully subscribed to last detection topic: %s", c.ProtocolConfig.LastDetectionTopic)
+        }
+
+	if token := client.Subscribe(c.ProtocolConfig.ClassTopic, qos, c.onClassMessage); token.Wait() && token.Error() != nil {
+	    klog.Errorf("Failed to subscribe to motion topic: %v", token.Error())
+	} else {
+	    klog.Infof("successfully subscribed to class topic: %s", c.ProtocolConfig.ClassTopic)
+	}
+
     })
 
     // Connect
@@ -84,14 +101,6 @@ func (c *CustomizedClient) InitDevice() error {
         return fmt.Errorf("failed to connect to MQTT broker: %v", token.Error())
     }
 
-    // Restore previous state (avoid resetting to default on re-init)
-    if previousState != "" {
-        c.motionStatus = previousState
-        klog.Infof("Restored motion status to: %s after reconnection", c.motionStatus)
-    } else if c.motionStatus == "" {
-        c.motionStatus = "no_motion"
-        klog.Infof("Initial motion status set to: %s", c.motionStatus)
-    }
 
     klog.Infof("Motion detection device initialized successfully with status: %s", c.motionStatus)
     return nil
@@ -105,8 +114,11 @@ func (c *CustomizedClient) GetDeviceData(visitor *VisitorConfig) (interface{}, e
         
         switch visitor.VisitorConfigData.PropertyName {
         case "motion":
-                klog.V(2).Infof("Returning motion status: %s", c.motionStatus)
                 return c.motionStatus, nil
+	case "last_detection":
+		return c.lastDetection, nil
+	case "class":
+		return c.classLabel, nil
         default:
                 return nil, fmt.Errorf("unknown property: %s", visitor.VisitorConfigData.PropertyName)
         }
@@ -164,11 +176,46 @@ func (c *CustomizedClient) onMotionMessage(client mqtt.Client, msg mqtt.Message)
         
         // Update motion status based on message content
         oldStatus := c.motionStatus
-        c.motionStatus = string(msg.Payload())
+        c.motionStatus = strings.TrimSpace(string(msg.Payload())) == "true"
         
         if oldStatus != c.motionStatus {
                 klog.Infof("Motion status changed from '%s' to '%s' - twin will be updated on next collection cycle", oldStatus, c.motionStatus)
         } else {
                 klog.V(2).Infof("Motion status unchanged: '%s'", c.motionStatus)
+        }
+}
+
+func (c *CustomizedClient) onLastDetectionMessage(client mqtt.Client, msg mqtt.Message) {
+        klog.V(2).Infof("Motion message received on topic %s: %s", msg.Topic(), string(msg.Payload()))
+        
+        c.deviceMutex.Lock()
+        defer c.deviceMutex.Unlock()
+        
+        // Update last detection status based on message content
+        oldStatus := c.lastDetection
+        c.lastDetection = strings.TrimSpace(string(msg.Payload()))
+        
+        if oldStatus != c.lastDetection {
+                klog.Infof("Last detectionn status changed from '%s' to '%s' - twin will be updated on next collection cycle", oldStatus, c.lastDetection)
+        } else {
+                klog.V(2).Infof("Last detection status unchanged: '%s'", c.lastDetection)
+        }
+}
+
+
+func (c *CustomizedClient) onClassMessage(client mqtt.Client, msg mqtt.Message) {
+        klog.V(2).Infof("Motion message received on topic %s: %s", msg.Topic(), string(msg.Payload()))
+        
+        c.deviceMutex.Lock()
+        defer c.deviceMutex.Unlock()
+        
+        // Update Class status based on message content
+        oldStatus := c.classLabel
+        c.classLabel  = strings.TrimSpace(string(msg.Payload()))
+        
+        if oldStatus != c.classLabel {
+                klog.Infof("Class status changed from '%s' to '%s' - twin will be updated on next collection cycle", oldStatus, c.classLabel)
+        } else {
+                klog.V(2).Infof("Class status unchanged: '%s'", c.classLabel)
         }
 }

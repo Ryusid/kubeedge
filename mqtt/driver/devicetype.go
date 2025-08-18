@@ -17,7 +17,9 @@ type CustomizedClient struct {
         // Motion detection specific variables
         deviceMutex    sync.Mutex
         mqttClient     mqtt.Client
-        motionStatus   string
+        motionStatus   bool
+	lastDetection  string
+	classLabel     string
         isConnected    bool
         ProtocolConfig
 }
@@ -29,12 +31,14 @@ type ProtocolConfig struct {
 
 type ConfigData struct {
         // MQTT protocol config data for motion detection
-        BrokerURL     string `json:"brokerURL"`     // MQTT Broker URL (required)
-        ClientID      string `json:"clientID"`      // MQTT Client ID (optional, will auto-generate)
-        MotionTopic   string `json:"motionTopic"`   // Topic to subscribe for motion detection (default: "motion")
-        Username      string `json:"username"`      // Username for MQTT broker authentication (optional)
-        Password      string `json:"password"`      // Password for MQTT broker authentication (optional)
-        QoS           int    `json:"qos"`           // QoS level for MQTT (default: 0)
+        BrokerURL    	   string `json:"brokerURL"`     // MQTT Broker URL (required)
+        ClientID      	   string `json:"clientID"`      // MQTT Client ID (optional, will auto-generate)
+	LastDetectionTopic string `json:"lastDetectionTopic"`
+	ClassTopic	   string `json:"classTopic"`
+        MotionTopic        string `json:"motionTopic"`   // Topic to subscribe for motion detection (default: "motion")
+        Username           string `json:"username"`      // Username for MQTT broker authentication (optional)
+        Password           string `json:"password"`      // Password for MQTT broker authentication (optional)
+        QoS                int    `json:"qos"`           // QoS level for MQTT (default: 0)
 }
 
 type VisitorConfig struct {

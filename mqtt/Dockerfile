@@ -40,7 +40,6 @@ COPY --from=builder /out/mqtt ./mqtt
 
 # Copy configs you have in repo
 COPY ./config.yaml ./config.yaml
-COPY ./config-local.yaml ./config-local.yaml
 
 # Helpful defaults; override at run-time if you like
 ENV CONFIG_PATH=/app/config.yaml

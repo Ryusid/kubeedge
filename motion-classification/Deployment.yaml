@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: motion-classifier
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: motion-classifier }
+  template:
+    metadata:
+      labels: { app: motion-classifier }
+    spec:
+      nodeName: raspberrypi
+      containers:
+        - name: classifier
+          image: ryusid/motion-classifier:latest
+          env:
+            - name: MQTT_BROKER
+              value: "192.168.8.218"
+            - name: MQTT_PORT
+              value: "1883"
+            - name: TOPIC_IN
+              value: "motion/device/+/image"
+            - name: TOPIC_OUT_FMT
+              value: "motion/device/{id}/class"
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits:   { cpu: "300m", memory: "512Mi" }
