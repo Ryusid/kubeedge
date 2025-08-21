@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coap-classifier
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: coap-classifier }
+  template:
+    metadata:
+      labels: { app: coap-classifier }
+    spec:
+      nodeName: raspberrypi
+      containers:
+        - name: classifier
+          image: ryusid/coap-classifier:latest
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits:   { cpu: "300m", memory: "512Mi" }
