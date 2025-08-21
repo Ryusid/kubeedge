@@ -18,7 +18,9 @@ type CustomizedDev struct {
 type CustomizedClient struct {
 	deviceMutex   sync.Mutex
 	ProtocolConfig
-	motionStatus string
+	motion bool
+	lastDetected string
+	class string
 	isConnected  bool
 
 	// CoAP specific fields
@@ -29,15 +31,20 @@ type CustomizedClient struct {
 // ProtocolConfig is the CoAP protocol configuration used by the driver.
 type ProtocolConfig struct {
 	ProtocolName string `json:"protocolName"`
-    ConfigData   `json:"configData"`
-	
+	ConfigData   `json:"configData"`
 }
 // Adding configdata
 type ConfigData struct {
 	Addr    string `json:"addr"`    // e.g. "192.168.8.50:5683"
-	Path    string `json:"path"`    // e.g. "/motion"
-	Observe bool   `json:"observe"` // true to use CoAP Observe
-	Timeout string `json:"timeout"` // e.g. "3s"
+	// resource paths
+	MotionPath    string `json:"motionPath"`    // "/motion"
+	LastPath      string `json:"lastPath"`      // "/last_detection"
+	ClassPath     string `json:"classPath"`     // "/class"
+
+	ObserveMotion bool   `json:"observeMotion"` // true to use CoAP Observe on motion
+	ObserveLast bool   `json:"observeLast"` // true to use CoAP Observe on last_detection
+	ObserveClass bool   `json:"observeClass"` // true to use CoAP Observe on class
+	Timeout string `json:"timeout"` // e.g. "5s"
 }
 
 // VisitorConfig holds property visitor configuration.

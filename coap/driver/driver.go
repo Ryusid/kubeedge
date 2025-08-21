@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,22 +30,32 @@ func NewClient(protocolConfig ProtocolConfig) (*CustomizedClient, error) {
 	client := &CustomizedClient{
 		ProtocolConfig: protocolConfig,
 		deviceMutex:    sync.Mutex{},
-		motionStatus:   "no_motion",
+		motion:         false,
+		lastDetected:   "",
+		class:          "",
 		isConnected:    false,
 	}
 	return client, nil
 }
 
 func (c *CustomizedClient) InitDevice() error {
-	prev := c.motionStatus
-	klog.Infof("Initializing CoAP device with addr: %s (preserving state: %s)", c.ProtocolConfig.Addr, prev)
+	klog.Infof("Init CoAP device addr=%s paths=[%s %s %s]",
+		c.ConfigData.Addr, c.ConfigData.MotionPath, c.ConfigData.LastPath, c.ConfigData.ClassPath)
 
 	if c.ProtocolConfig.Addr == "" {
 		return fmt.Errorf("addr is required in protocol config")
 	}
-	if c.ProtocolConfig.Path == "" {
-		c.ProtocolConfig.Path = "/motion"
+	if c.ProtocolConfig.MotionPath == "" {
+		c.ProtocolConfig.MotionPath = "/motion"
 	}
+
+	if c.ProtocolConfig.LastPath == "" {
+		c.ProtocolConfig.LastPath = "/last_detection"
+	}
+	if c.ProtocolConfig.ClassPath == "" {
+                c.ProtocolConfig.ClassPath = "/class"
+        }
+
 
 	// parent context for the client lifecycle
 	ctx, cancel := context.WithCancel(context.Background())
@@ -52,10 +64,6 @@ func (c *CustomizedClient) InitDevice() error {
 	// launch the self-healing loop (will dial, observe, health-check, and reconnect)
 	go c.runConnectionLoop(ctx)
 
-	// restore cached state (if any)
-	if prev != "" {
-		c.motionStatus = prev
-	}
 	return nil
 }
 
@@ -92,47 +100,64 @@ func (c *CustomizedClient) runConnectionLoop(ctx context.Context) {
 		c.deviceMutex.Lock()
 		c.conn = conn
 		c.isConnected = true
-		if c.motionStatus == "" {
-			c.motionStatus = "no_motion"
-		}
 		c.deviceMutex.Unlock()
 		klog.Infof("CoAP connected successfully to %s", c.ProtocolConfig.Addr)
 		backoff = minBackoff
 
 		// Set up Observe if enabled
-		var obsCancel context.CancelFunc
-		if c.ProtocolConfig.Observe {
+		obsCancels := []context.CancelFunc{}
+		setupObs := func(path string, handler func(*pool.Message)) error {
 			obsCtx, cancel := context.WithCancel(ctx)
-			obsCancel = cancel
+			obsCancels = append(obsCancels, cancel)
+			_, err := conn.Observe(obsCtx, path, handler)
+			return err
+		}
 
-			_, err := conn.Observe(obsCtx, c.ProtocolConfig.Path, func(n *pool.Message) {
-				payload, _ := n.ReadBody()
-				val := string(payload)
-				if val == "" {
-					val = "no_motion"
-				}
+		if c.ProtocolConfig.ObserveMotion {
+			if err := setupObs(c.ProtocolConfig.MotionPath, func(m *pool.Message) {
+				val := parseBoolPayload(m)
 				c.deviceMutex.Lock()
-				old := c.motionStatus
-				c.motionStatus = val
+				old := c.motion
+				c.motion = val
 				c.deviceMutex.Unlock()
 				if old != val {
-					klog.Infof("CoAP observe notification: '%s' -> '%s'", old, val)
+					klog.Infof("CoAP observe motion: %v", val)
 				}
-			})
-			if err != nil {
-				klog.Warningf("Observe %s failed: %v", c.ProtocolConfig.Path, err)
-				// observation failed; tear down and reconnect
-				if obsCancel != nil {
-					obsCancel()
-				}
-				c.closeConn()
-				if !c.sleepOrExit(ctx, backoff) {
-					return
-				}
-				backoff = nextBackoff(backoff)
-				continue
+			}); err != nil {
+				klog.Warningf("Observe %s failed: %v", c.ProtocolConfig.MotionPath, err)
+			} else {
+				klog.Infof("Observing %s", c.ProtocolConfig.MotionPath)
 			}
-			klog.Infof("Observing CoAP resource: %s", c.ProtocolConfig.Path)
+		}
+
+		if c.ProtocolConfig.ObserveLast {
+			if err := setupObs(c.ProtocolConfig.LastPath, func(m *pool.Message) {
+				body, _ := m.ReadBody()
+				val := strings.TrimSpace(string(body))
+				c.deviceMutex.Lock()
+				c.lastDetected = val
+				c.deviceMutex.Unlock()
+				klog.Infof("CoAP observe last_detected: %s", val)
+			}); err != nil {
+				klog.Warningf("Observe %s failed: %v", c.ProtocolConfig.LastPath, err)
+			} else {
+				klog.Infof("Observing %s", c.ProtocolConfig.LastPath)
+			}
+		}
+
+		if c.ProtocolConfig.ObserveClass {
+			if err := setupObs(c.ProtocolConfig.ClassPath, func(m *pool.Message) {
+				body, _ := m.ReadBody()
+				val := strings.TrimSpace(string(body))
+				c.deviceMutex.Lock()
+				c.class = val
+				c.deviceMutex.Unlock()
+				klog.Infof("CoAP observe class: %s", val)
+			}); err != nil {
+				klog.Warningf("Observe %s failed: %v", c.ProtocolConfig.ClassPath, err)
+			} else {
+				klog.Infof("Observing %s", c.ProtocolConfig.ClassPath)
+			}
 		}
 
 		// Health-check loop
@@ -142,13 +167,13 @@ func (c *CustomizedClient) runConnectionLoop(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				healthTicker.Stop()
-				if obsCancel != nil {
-					obsCancel()
+				for _, cancel := range obsCancels {
+					cancel()
 				}
 				return
 			case <-healthTicker.C:
 				hctx, cancel := context.WithTimeout(ctx, healthTimeout)
-				_, err := conn.Get(hctx, c.ProtocolConfig.Path)
+				_, err := conn.Get(hctx, c.ProtocolConfig.MotionPath)
 				cancel()
 				if err != nil {
 					klog.Warningf("CoAP health check failed: %v (will reconnect)", err)
@@ -158,8 +183,8 @@ func (c *CustomizedClient) runConnectionLoop(ctx context.Context) {
 		}
 
 		// Leave observe, close connection, backoff, then retry
-		if obsCancel != nil {
-			obsCancel()
+		for _, cancel := range obsCancels {
+			cancel()
 		}
 		c.closeConn()
 		if !c.sleepOrExit(ctx, backoff) {
@@ -168,6 +193,18 @@ func (c *CustomizedClient) runConnectionLoop(ctx context.Context) {
 		backoff = nextBackoff(backoff)
 	}
 }
+
+
+func (c *CustomizedClient) closeConn() {
+	c.deviceMutex.Lock()
+	defer c.deviceMutex.Unlock()
+	if c.conn != nil {
+		_ = c.conn.Close()
+		c.conn = nil
+	}
+	c.isConnected = false
+}
+
 
 func nextBackoff(cur time.Duration) time.Duration {
 	nb := cur * 2
@@ -188,78 +225,96 @@ func (c *CustomizedClient) sleepOrExit(ctx context.Context, d time.Duration) boo
 	}
 }
 
-func (c *CustomizedClient) closeConn() {
-	c.deviceMutex.Lock()
-	defer c.deviceMutex.Unlock()
-	if c.conn != nil {
-		_ = c.conn.Close()
-		c.conn = nil
+func parseBoolPayload(m *pool.Message) bool {
+	body, _ := m.ReadBody()
+	s := strings.TrimSpace(strings.ToLower(string(body)))
+	switch s {
+	case "true", "1", "on", "yes", "y", "motion", "motion_detected":
+		return true
+	case "false", "0", "off", "no", "n", "no_motion":
+		return false
+	default:
+		// best-effort: try to parse JSON "true"/"false"
+		b, err := strconv.ParseBool(s)
+		if err == nil {
+			return b
+		}
+		return false
 	}
-	c.isConnected = false
 }
+
 
 // GetDeviceData returns device data for a specific property
 func (c *CustomizedClient) GetDeviceData(visitor *VisitorConfig) (interface{}, error) {
 	prop := visitor.VisitorConfigData.PropertyName
 	klog.V(2).Infof("GetDeviceData called for property: %s", prop)
+	c.deviceMutex.Lock()
+	defer c.deviceMutex.Unlock()
 
 	switch prop {
 	case "motion":
 		// If observe enabled, just return cached state.
-		if c.ProtocolConfig.Observe {
-			c.deviceMutex.Lock()
-			val := c.motionStatus
-			c.deviceMutex.Unlock()
-			klog.V(2).Infof("Returning cached motion status: %s", val)
-			return val, nil
+		if c.ProtocolConfig.ObserveMotion && c.conn != nil {
+			if v, ok := c.pollBool(c.ProtocolConfig.MotionPath); ok {
+				c.motion = v
+			}
 		}
+		return c.motion, nil
 
-		// Polling mode: do a live GET, with a small timeout. If it fails, return cached.
-		c.deviceMutex.Lock()
-		conn := c.conn
-		cached := c.motionStatus
-		c.deviceMutex.Unlock()
-
-		if conn == nil {
-			return cachedOrNoMotion(cached), fmt.Errorf("CoAP client not connected")
+	case "last_detection":
+		if !c.ProtocolConfig.ObserveLast && c.conn != nil {
+			if v, ok := c.pollString(c.ProtocolConfig.LastPath); ok {
+				c.lastDetected = v
+			}
 		}
+		return c.lastDetected, nil
 
-		ctx, cancel := context.WithTimeout(context.Background(), getTimeout)
-		defer cancel()
-
-		resp, err := conn.Get(ctx, c.ProtocolConfig.Path)
-		if err != nil {
-			klog.Warningf("CoAP GET failed: %v, returning cached status", err)
-			return cachedOrNoMotion(cached), nil
-		}
-		if resp.Code() != codes.Content {
-			klog.Warningf("CoAP GET returned %v, returning cached status", resp.Code())
-			return cachedOrNoMotion(cached), nil
-		}
-
-		body, _ := resp.ReadBody()
-		val := string(body)
-		if val == "" {
-			val = "no_motion"
-		}
-
-		c.deviceMutex.Lock()
-		c.motionStatus = val
-		c.deviceMutex.Unlock()
-		klog.V(2).Infof("CoAP GET returned motion status: %s", val)
-		return val, nil
-
+        case "class":
+                if !c.ProtocolConfig.ObserveClass && c.conn != nil {
+                        if v, ok := c.pollString(c.ProtocolConfig.ClassPath); ok {
+                                c.class = v
+                        }
+                }
+                return c.class, nil
 	default:
 		return nil, fmt.Errorf("unknown property: %s", prop)
 	}
 }
 
-func cachedOrNoMotion(cached string) string {
+func (c *CustomizedClient) pollBool(path string) (bool, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), getTimeout)
+	defer cancel()
+	if c.conn == nil {
+		return false, false
+	}
+	resp, err := c.conn.Get(ctx, path)
+	if err != nil || resp.Code() != codes.Content {
+		return false, false
+	}
+	return parseBoolPayload(resp), true
+}
+
+func (c *CustomizedClient) pollString(path string) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), getTimeout)
+	defer cancel()
+	if c.conn == nil {
+		return "", false
+	}
+	resp, err := c.conn.Get(ctx, path)
+	if err != nil || resp.Code() != codes.Content {
+		return "", false
+	}
+	body, _ := resp.ReadBody()
+	return strings.TrimSpace(string(body)), true
+}
+
+
+/*func cachedOrNoMotion(cached string) string {
 	if cached == "" {
 		return "no_motion"
 	}
 	return cached
-}
+}*/
 
 func (c *CustomizedClient) DeviceDataWrite(visitor *VisitorConfig, deviceMethodName string, propertyName string, data interface{}) error {
 	klog.V(3).Infof("DeviceDataWrite called for property: %s with data: %v", propertyName, data)

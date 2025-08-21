@@ -21,7 +21,7 @@ spec:
               mountPath: /etc/kubeedge
             - name: config
               mountPath: /tmp
-          image: ryusid/motion-coap-mapper:arm64v5 # Replace with your mapper image name
+          image: ryusid/motion-coap-mapper:arm64v6 # Replace with your mapper image name
           imagePullPolicy: Always
           resources:
             limits:

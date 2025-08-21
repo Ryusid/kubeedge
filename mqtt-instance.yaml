@@ -47,3 +47,21 @@ spec:
       classTopic:         motion/device/mqtt-sensor-room1/class         # payload: "person"/"unknown"
       # Optional if you test images over MQTT (see §4):
       imageTopic:         motion/device/mqtt-sensor-room1/image
+status:
+  twins:
+    - propertyName: motion
+      reported:
+        value: ""
+        metadata:
+          type: "bool"
+    - propertyName: class
+      reported:
+        value: ""
+        metadata:
+          type: "string"
+    - propertyName: last_detection
+      reported:
+        value: ""
+        metadata:
+          type: "string"
+
