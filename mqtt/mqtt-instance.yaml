@@ -15,7 +15,7 @@ spec:
       visitors:
         protocolName: mqtt
         configData:
-          dataType: boolean
+          dataType: bool
           propertyName: motion
     - name: last_detection
       collectCycle: 15000
