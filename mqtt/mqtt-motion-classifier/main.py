@@ -1,5 +1,5 @@
 import os
-import cv2
+from ultralytics import YOLO
 import numpy as np
 import paho.mqtt.client as mqtt
 
@@ -10,20 +10,15 @@ TOPIC_OUT_FMT = os.environ.get("TOPIC_OUT_FMT", "motion/device/{id}/class")
 
 print(f"[CFG] broker={BROKER}:{PORT} in={TOPIC_IN}")
 
-CASCADE_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
-if face_cascade.empty():
-   raise RuntimeError("Failed to load Haar cascade")
-
+model = YOLO("yolo11n.pt")
 def classify_bgr(img_bgr: np.ndarray) -> str:
     """Return 'person' if we see a person, else 'unknown'."""
     if img_bgr is None or img_bgr.size == 0:
         return "unknown"
     else:
         # Very lightweight heuristic: faces ≈ person
-        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, 1.2, 3)
-        return "person" if len(faces) > 0 else "unknown"
+        res = model.predict(img_bgr, classes=[0], conf=0.3, verbose=False)[0]
+        return res
 
 def on_message(client, userdata, msg):
     try:
