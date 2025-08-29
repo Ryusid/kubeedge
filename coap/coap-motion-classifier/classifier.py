@@ -83,7 +83,7 @@ async def handle_signal(protocol: Context):
 
     except Exception as e:
         # Observation couldn't be established
-        print(f"[classifier] observe error: {e}")
+        print(f"observe error: {e}")
         raise
     finally:
         # Stop observing if we're leaving this coroutine
@@ -94,16 +94,12 @@ async def main_loop():
     while True:
         try:
             protocol = await Context.create_client_context()
-            log.info(f"successfully connected to {HOST}:{PORT}")
             await handle_signal(protocol)
         except Exception as e:
-            log.info(f"[classifier] will retry in {RETRY_MS}ms (reason: {e})")
+            log.info(f"will retry in {RETRY_MS}ms (reason: {e})")
             await asyncio.sleep(RETRY_MS / 1000.0)
         finally:
-            try:
-                await protocol.shutdown()
-            except Exception:
-                pass
+            pass
 
 if __name__ == "__main__":
     asyncio.run(main_loop())
