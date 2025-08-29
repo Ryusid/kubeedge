@@ -10,10 +10,17 @@ spec:
     metadata:
       labels: { app: coap-classifier }
     spec:
-      nodeName: raspberrypi
+      nodeName: raspberrypi #Change this to the cloud Master node for cloud deployment + spec.hostNetwork: true
       containers:
         - name: classifier
           image: ryusid/coap-classifier:latest
+          env:
+          - name: COAP_HOST
+            value: "192.168.8.222"
+          - name: COAP_PORT
+            value: "5683"
+          - name: SIGNAL_PATH
+            value: "signal" #set this to "lastdetected" to use the classifier with the motion detection app.
           resources:
-            requests: { cpu: "50m", memory: "128Mi" }
-            limits:   { cpu: "300m", memory: "512Mi" }
+            requests: { cpu: "50m", memory: "100Mi" }
+            limits:   { cpu: "300m", memory: "250Mi" }
