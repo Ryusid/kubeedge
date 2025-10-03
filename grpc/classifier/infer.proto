@@ -1,0 +1,19 @@
+// infer.proto
+syntax = "proto3";
+package infer;
+
+service Inference {
+  rpc Infer (Frame) returns (Result);
+}
+
+message Frame {
+  bytes data = 1;
+  string id  = 2;
+  string meta = 3; // e.g. "image/jpeg"
+}
+
+message Result {
+  string id    = 1;
+  string label = 2;
+  double infer_ms = 3;
+}

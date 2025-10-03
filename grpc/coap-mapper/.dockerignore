@@ -1,0 +1,31 @@
+# VCS & editors
+.git
+**/.git
+**/.gitignore
+**/.idea
+**/.vscode
+
+# Builds & caches
+bin
+dist
+out
+build
+coverage
+*.log
+*.tmp
+
+# Node / misc (if ever present)
+node_modules
+
+# Kubernetes/CI artifacts (if any)
+*.swp
+*.swo
+
+# Local scripts / extra Dockerfiles you don't want in context
+Dockerfile_*
+docker-compose*.yml
+hack/
+nostreambuild.sh
+
+# K8s manifests that aren't needed in image
+resource/

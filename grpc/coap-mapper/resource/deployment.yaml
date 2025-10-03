@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coap-mapper
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coap-mapper
+  template:
+    metadata:
+      labels:
+        app: coap-mapper
+    spec:
+      nodeName: raspberrypi # replace with your edge node name
+      containers:
+        - name: coap-mapper
+          volumeMounts: # Required, mapper need to communicate with grpcclient and get the config
+            - name: test-volume
+              mountPath: /etc/kubeedge
+            - name: config
+              mountPath: /tmp
+          image: ryusid/motion-coap-mapper:arm64v6 # Replace with your mapper image name
+          imagePullPolicy: Always
+          resources:
+            limits:
+              cpu: 300m
+              memory: 500Mi
+            requests:
+              cpu: 100m
+              memory: 100Mi
+          command: [ "/bin/sh","-c" ]
+          args: [ "/app/coap --config-file /tmp/config.yaml --v 4" ]
+      volumes:
+        - name: test-volume
+          hostPath:
+            path: /etc/kubeedge
+            type: Directory
+        - name: config
+          configMap:
+            name: coap-cm-mapper
+            items:
+              - key: configData
+                path: config.yaml
