@@ -1,37 +1,22 @@
-# edge-stack.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: edge-grpc-stack
+  name: edge-grpc-classifier
   namespace: default
 spec:
   replicas: 1
-  selector: { matchLabels: { app: edge-motion-stack } }
+  selector: { matchLabels: { app: edge-classifier } }
   template:
-    metadata: { labels: { app: edge-motion-stack } }
+    metadata: { labels: { app: edge-classifier } }
     spec:
-      nodeSelector: { kubernetes.io/hostname: raspberrypi }
+      nodeSelector: { kubernetes.io/hostname: raspberrypi } # Change with the appropriate node name
       hostNetwork: true                      # expose CoAP on the edge host IP
       dnsPolicy: ClusterFirstWithHostNet
       containers:
-      # 2) Local gRPC worker
-      - name: worker
+      - name: classifier
         image: ryusid/grpc-worker:latest
         env:
         - { name: CLASS_NAMES, value: "edge1,edge2,edge3,edge4,edge5" }
         - { name: GRPC_LOGGER, value: "Edge-GRPC" }
         - { name: GRPC_BIND, value: "0.0.0.0:50051" }
         - { name: INFER_DELAY_MS, value: "10" }
-      # 3) Dispatcher
-      - name: dispatcher
-        image: ryusid/grpc-dispatcher:latest
-        env:
-        - { name: DISPATCH_BIND, value: "0.0.0.0:50052" }
-        - { name: LOCAL_ADDR, value: "127.0.0.1:50051" }
-        - { name: CLOUD_ADDR, value: "192.168.8.108:50051" }
-        - { name: CPU_HIGH, value: "75" }
-        - { name: CPU_LOW, value: "40" }
-        - { name: P95_TARGET_MS, value: "150" }
-        - { name: MAX_LOCAL_CONC, value: "2" }
-        - { name: Q_HIGH, value: "16" }
-        readinessProbe: { tcpSocket: { port: 50052 }, initialDelaySeconds: 2, periodSeconds: 5 }
