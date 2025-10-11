@@ -1,7 +1,7 @@
 import logging
 import asyncio
 from motion_detection.detector import MotionDetector
-from coap.server import start_server
+from coap_server.server import start_server
 
 
 logging.basicConfig(
@@ -11,7 +11,7 @@ logging.basicConfig(
 
 
 # configure here
-BIND_IP = "192.168.8.222"
+BIND_IP = "127.0.0.1"
 BIND_PORT = 5683
 
 def main():
