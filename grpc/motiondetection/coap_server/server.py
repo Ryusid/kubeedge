@@ -6,9 +6,9 @@ import uuid
 from datetime import datetime
 import cv2
 from aiocoap import resource, Context, Message, Code, numbers
-
-import grpc
 import infer_pb2, infer_pb2_grpc
+import grpc
+
 
 log = logging.getLogger("Coap-server")
 
@@ -128,7 +128,7 @@ def on_fall_factory(motion_res):
 
 # ------------------- server entry -------------------
 
-async def start_server(bind_ip="192.168.8.222", bind_port=5683,
+async def start_server(bind_ip, bind_port=5683,
                        motion_detector_loop=None,
                        grpc_addr: str | None = None):
     """
