@@ -1,7 +1,7 @@
 import logging
 import asyncio
 from motion_detection.detector import MotionDetector
-from coap.server import start_server
+from coap_server.server import start_server
 import os
 
 logging.basicConfig(
@@ -9,9 +9,9 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s"
 )
 
-BIND_IP = "192.168.8.222"
+BIND_IP = "127.0.0.1"
 BIND_PORT = 5683
-GRPC_ADDR = os.getenv("GRPC_ADDR", "192.168.8.218:50052")  # <--- the address of the grpc dispatcher
+GRPC_ADDR = os.getenv("GRPC_ADDR", "127.0.0.1:50051")  # <--- the address of the grpc dispatcher
 
 def main():
     det = MotionDetector(
